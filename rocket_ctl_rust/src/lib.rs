@@ -1,13 +1,19 @@
 mod calc_crc;
+mod client;
 mod frame;
+mod state;
+
+use client::RocketClient;
 
 use frame::{
     build_command_frame, build_full_frame, parse_raw_frame, TelemetryFrame,
     ACTION_ACK, ACTION_FEED, ACTION_NACK, ACTION_SERVICE, BOARD_ROCKET, BOARD_SOFTWARE,
     DEVICE_RELAY, DEVICE_SENSOR, DEVICE_SERVO, PRIORITY_HIGH, PRIORITY_LOW,
 };
+
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use state::RocketState;
 
 #[pyfunction]
 fn parse_frame(data: &[u8]) -> PyResult<TelemetryFrame> {
@@ -55,25 +61,43 @@ fn build_raw_frame(
 }
 
 #[pymodule]
-fn rocket_comm_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn rocket_ctl_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_frame, m)?)?;
     m.add_function(wrap_pyfunction!(build_servo_command, m)?)?;
     m.add_function(wrap_pyfunction!(build_relay_command, m)?)?;
     m.add_function(wrap_pyfunction!(build_raw_frame, m)?)?;
     m.add_class::<TelemetryFrame>()?;
+    m.add_class::<RocketState>()?;
+    m.add_class::<RocketClient>()?;
 
+    let c = pyo3::types::PyModule::new(
+        m.py(),
+        "constants"
+    )?;
+    
     // Export protocol constants
-    m.add("BOARD_SOFTWARE", BOARD_SOFTWARE)?;
-    m.add("BOARD_ROCKET", BOARD_ROCKET)?;
-    m.add("ACTION_FEED", ACTION_FEED)?;
-    m.add("ACTION_SERVICE", ACTION_SERVICE)?;
-    m.add("ACTION_ACK", ACTION_ACK)?;
-    m.add("ACTION_NACK", ACTION_NACK)?;
-    m.add("PRIORITY_HIGH", PRIORITY_HIGH)?;
-    m.add("PRIORITY_LOW", PRIORITY_LOW)?;
-    m.add("DEVICE_SERVO", DEVICE_SERVO)?;
-    m.add("DEVICE_RELAY", DEVICE_RELAY)?;
-    m.add("DEVICE_SENSOR", DEVICE_SENSOR)?;
+    c.add("BOARD_SOFTWARE", BOARD_SOFTWARE)?;
+    c.add("BOARD_ROCKET", BOARD_ROCKET)?;
+    c.add("ACTION_FEED", ACTION_FEED)?;
+    c.add("ACTION_SERVICE", ACTION_SERVICE)?;
+    c.add("ACTION_ACK", ACTION_ACK)?;
+    c.add("ACTION_NACK", ACTION_NACK)?;
+    c.add("PRIORITY_HIGH", PRIORITY_HIGH)?;
+    c.add("PRIORITY_LOW", PRIORITY_LOW)?;
+    c.add("DEVICE_SERVO", DEVICE_SERVO)?;
+    c.add("DEVICE_RELAY", DEVICE_RELAY)?;
+    c.add("DEVICE_SENSOR", DEVICE_SENSOR)?;
+
+    // Mission control constants
+    c.add("SERVO_FUEL_INTAKE", 0u8)?;
+    c.add("SERVO_OXIDIZER_INTAKE", 1u8)?;
+    c.add("SERVO_FUEL_MAIN", 2u8)?;
+    c.add("SERVO_OXIDIZER_MAIN", 3u8)?;
+    c.add("RELAY_HEATER", 0u8)?;
+    c.add("RELAY_IGNITER", 1u8)?;
+    c.add("RELAY_PARACHUTE", 2u8)?;
+
+    m.add_submodule(&c)?;
 
     Ok(())
 }

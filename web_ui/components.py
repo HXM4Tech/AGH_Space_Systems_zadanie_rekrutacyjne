@@ -2,13 +2,15 @@ import asyncio
 import time
 from typing import Optional, List
 from nicegui import ui
-from state import (
-    RocketState,
-    SERVO_FUEL_INTAKE, SERVO_OXIDIZER_INTAKE,
-    SERVO_FUEL_MAIN, SERVO_OXIDIZER_MAIN,
-    RELAY_HEATER, RELAY_IGNITER, RELAY_PARACHUTE,
-)
-from client import RocketClient
+import rocket_ctl_rust
+
+RELAY_HEATER = rocket_ctl_rust.constants.RELAY_HEATER
+RELAY_IGNITER = rocket_ctl_rust.constants.RELAY_IGNITER
+RELAY_PARACHUTE = rocket_ctl_rust.constants.RELAY_PARACHUTE
+SERVO_OXIDIZER_INTAKE = rocket_ctl_rust.constants.SERVO_OXIDIZER_INTAKE
+SERVO_FUEL_INTAKE = rocket_ctl_rust.constants.SERVO_FUEL_INTAKE
+SERVO_FUEL_MAIN = rocket_ctl_rust.constants.SERVO_FUEL_MAIN
+SERVO_OXIDIZER_MAIN = rocket_ctl_rust.constants.SERVO_OXIDIZER_MAIN
 
 BASE_CARD_CLS = "bg-slate-900 border p-4 rounded-xl shadow transition-all "
 
@@ -24,7 +26,7 @@ CHECKLIST_ITEMS = [
 ]
 
 class MissionDashboard:
-    def __init__(self, state: RocketState, client: RocketClient):
+    def __init__(self, state: rocket_ctl_rust.RocketState, client: rocket_ctl_rust.RocketClient):
         self.state = state
         self.client = client
         self.auto_running: bool = False
@@ -231,15 +233,21 @@ class MissionDashboard:
         if self.auto_task and not self.auto_task.done():
             self.auto_task.cancel()
         self.auto_running = False
-        if self.auto_switch.value:
+        if hasattr(self, 'auto_switch') and self.auto_switch.value:
             self.auto_switch.value = False
         self.auto_status_text = None
         # Ensure heater is safe on disengagement
         try:
-            asyncio.create_task(self.client.send_relay(RELAY_HEATER, False))
-        except RuntimeError:
-            coro = self.client.send_relay(RELAY_HEATER, False)
-            coro.close()
+            res = self.client.send_relay(RELAY_HEATER, False)
+            if asyncio.iscoroutine(res) or hasattr(res, '__await__'):
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(res)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     async def execute_launch_sequence(self):
         """Executes ignition sequence with zero toast notifications."""
@@ -485,7 +493,7 @@ class MissionDashboard:
             self.control_mode_badge.classes(replace="text-xs font-mono px-2.5 py-1 rounded bg-amber-950 text-amber-400 border border-amber-800 font-bold")
 
         else:
-            # Manual control fully enabled & unlocked
+            # Manual control fully enabled & unlocked (no interlocks)
             self.btn_ox_refuel.set_enabled(True)
             self.btn_ox_close.set_enabled(True)
             self.btn_fuel_refuel.set_enabled(self.state.can_refuel_fuel)
@@ -494,11 +502,7 @@ class MissionDashboard:
             self.btn_heater_off.set_enabled(True)
             self.launch_btn.set_enabled(self.state.can_launch)
             self.parachute_btn.set_enabled(self.state.can_deploy_parachute)
-
-            if self.state.can_deploy_parachute:
-                self.parachute_btn.classes(replace="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 text-xs rounded-lg shadow-lg animate-pulse")
-            else:
-                self.parachute_btn.classes(replace="w-full bg-slate-700 text-slate-300 font-bold py-2.5 text-xs rounded-lg shadow")
+            self.parachute_btn.classes(replace="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 text-xs rounded-lg shadow-lg animate-pulse")
 
             self.control_mode_badge.set_text("MANUAL MODE")
             self.control_mode_badge.classes(replace="text-xs font-mono px-2.5 py-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold")
