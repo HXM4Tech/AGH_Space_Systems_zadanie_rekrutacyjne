@@ -1,1 +1,4 @@
 **/__pycache__
+venv/
+rocket_comm_rust/target/
+rocket_comm_rust/Cargo.lock
