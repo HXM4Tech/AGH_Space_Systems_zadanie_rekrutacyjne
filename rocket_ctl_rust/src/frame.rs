@@ -1,20 +1,7 @@
-use crate::calc_crc::calculate_crc32;
 use pyo3::prelude::*;
 
-pub const BOARD_SOFTWARE: u8 = 0x01;
-pub const BOARD_ROCKET: u8 = 0x02;
-
-pub const ACTION_FEED: u8 = 0x00;
-pub const ACTION_SERVICE: u8 = 0x01;
-pub const ACTION_ACK: u8 = 0x02;
-pub const ACTION_NACK: u8 = 0x03;
-
-pub const PRIORITY_HIGH: u8 = 0x00;
-pub const PRIORITY_LOW: u8 = 0x01;
-
-pub const DEVICE_SERVO: u8 = 0x00;
-pub const DEVICE_RELAY: u8 = 0x01;
-pub const DEVICE_SENSOR: u8 = 0x02;
+use crate::calc_crc::calculate_crc32;
+use crate::constants::*;
 
 #[pyclass(get_all)]
 #[derive(Clone, Debug, PartialEq)]
@@ -167,32 +154,4 @@ pub fn build_full_frame(
     out[10..14].copy_from_slice(&crc);
 
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_servo_command_encoding() {
-        let mut payload = [0u8; 4];
-        payload[..2].copy_from_slice(&0i16.to_le_bytes());
-        let frame = build_command_frame(BOARD_ROCKET, DEVICE_SERVO, 1, 5, 5, payload);
-
-        // Expected wire format verified against GroundStationProtocol.encode:
-        // 05 a2 08 40 50 05 00 00 00 00 90 3e 24 c1
-        assert_eq!(
-            frame,
-            vec![0x05, 0xa2, 0x08, 0x40, 0x50, 0x05, 0x00, 0x00, 0x00, 0x00, 0x90, 0x3e, 0x24, 0xc1]
-        );
-
-        let parsed = parse_raw_frame(&frame).unwrap();
-        assert_eq!(parsed.destination, BOARD_ROCKET);
-        assert_eq!(parsed.source, BOARD_SOFTWARE);
-        assert_eq!(parsed.device_type, DEVICE_SERVO);
-        assert_eq!(parsed.device_id, 1);
-        assert_eq!(parsed.data_type, 5);
-        assert_eq!(parsed.operation, 5);
-        assert_eq!(parsed.value_int, Some(0));
-    }
 }

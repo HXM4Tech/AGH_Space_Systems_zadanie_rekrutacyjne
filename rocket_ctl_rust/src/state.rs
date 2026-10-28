@@ -2,16 +2,8 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use crate::frame::{TelemetryFrame, ACTION_ACK};
-
-const SERVO_FUEL_INTAKE: u8 = 0;
-const SERVO_OXIDIZER_INTAKE: u8 = 1;
-const SERVO_FUEL_MAIN: u8 = 2;
-const SERVO_OXIDIZER_MAIN: u8 = 3;
-
-const RELAY_HEATER: u8 = 0;
-const RELAY_IGNITER: u8 = 1;
-const RELAY_PARACHUTE: u8 = 2;
+use crate::frame::TelemetryFrame;
+use crate::constants::*;
 
 #[pyclass(get_all, set_all)]
 #[derive(Clone, Debug)]

@@ -8,7 +8,7 @@ name = "rocket_ctl_rust"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.30.1", features = ["extension-module", "abi3-py39"] }
+pyo3 = { version = "0.30.1", features = ["extension-module", "abi3-py39", "experimental-async"] }
 pyo3-async-runtimes = { version = "0.30", features = ["tokio-runtime"] }
 crc = "3.0"
 tokio = { version = "1.47", features = ["full"] }

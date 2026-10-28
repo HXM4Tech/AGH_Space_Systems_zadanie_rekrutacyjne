@@ -2,16 +2,15 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use pyo3::prelude::*;
-use pyo3_async_runtimes::tokio::future_into_py;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::runtime::Builder;
 use tokio::sync::Mutex as TokioMutex;
 
-use crate::frame::{build_command_frame, BOARD_ROCKET, DEVICE_RELAY, DEVICE_SERVO};
+use crate::frame::build_command_frame;
+use crate::constants::*;
 
-#[pyclass]
 pub struct RocketClient {
     state: Arc<Mutex<Py<PyAny>>>,
     host: String,
@@ -20,13 +19,10 @@ pub struct RocketClient {
     running: Arc<Mutex<bool>>,
 }
 
-#[pymethods]
 impl RocketClient {
-    #[new]
-    #[pyo3(signature = (state, host="127.0.0.1", port=3000))]
-    fn new(state: Py<PyAny>, host: &str, port: u16) -> PyResult<Self> {
+    pub fn new(state: Arc<Mutex<Py<PyAny>>>, host: &str, port: u16) -> PyResult<Self> {
         Ok(Self {
-            state: Arc::new(Mutex::new(state)),
+            state,
             host: host.to_string(),
             port,
             writer: Arc::new(TokioMutex::new(None)),
@@ -34,14 +30,14 @@ impl RocketClient {
         })
     }
 
-    fn start(&self) -> PyResult<()> {
-        {
-            let mut running = self.running.lock();
-            if *running {
-                return Ok(());
-            }
-            *running = true;
+    pub async fn start(&self) -> PyResult<()> {
+        let mut running = self.running.lock();
+        if *running {
+            return Ok(());
         }
+        *running = true;
+
+        drop(running);
 
         let state = self.state.clone();
         let writer = self.writer.clone();
@@ -129,69 +125,67 @@ impl RocketClient {
         Ok(())
     }
 
-    fn send_servo<'py>(&self, py: Python<'py>, device_id: u8, position: i16) -> PyResult<Bound<'py, PyAny>> {
+    pub async fn send_servo(&self, device_id: u8, position: i16) -> Result<(), PyErr> {
         let writer = self.writer.clone();
         let state = self.state.clone();
 
-        future_into_py(py, async move {
-            let data = build_command_frame(BOARD_ROCKET, DEVICE_SERVO, device_id, 5, 5, [position as u8, (position >> 8) as u8, 0, 0]);
-            let mut wrote = false;
+        let data = build_command_frame(BOARD_ROCKET, DEVICE_SERVO, device_id, 5, 5, [position as u8, (position >> 8) as u8, 0, 0]);
+        let mut wrote = false;
 
-            let mut w = writer.lock().await;
-            if let Some(writer) = w.as_mut() {
-                if writer.write_all(&data).await.is_ok() {
-                    if writer.flush().await.is_ok() {
-                        wrote = true;
-                    }
+        let mut w = writer.lock().await;
+        if let Some(writer) = w.as_mut() {
+            if writer.write_all(&data).await.is_ok() {
+                if writer.flush().await.is_ok() {
+                    wrote = true;
                 }
             }
-            drop(w);
+        }
+        drop(w);
 
-            if wrote {
-                Python::attach(|py| {
-                    let st = state.lock();
-                    if let Ok(servos) = st.bind(py).getattr("servos") {
-                        let _ = servos.set_item(device_id, position as i32);
-                    }
-                });
-            }
-            Ok(wrote)
-        })
+        if wrote {
+            Python::attach(|py| {
+                let st = state.lock();
+                if let Ok(servos) = st.bind(py).getattr("servos") {
+                    let _ = servos.set_item(device_id, position as i32);
+                }
+            });
+        }
+
+        Ok(())
     }
 
-    fn send_relay<'py>(&self, py: Python<'py>, device_id: u8, open_state: bool) -> PyResult<Bound<'py, PyAny>> {
+    pub async fn send_relay(&self, device_id: u8, open_state: bool) -> Result<bool, PyErr> {
         let writer = self.writer.clone();
         let state = self.state.clone();
 
-        future_into_py(py, async move {
-            let op = if open_state { 1u8 } else { 2u8 };
-            let data = build_command_frame(BOARD_ROCKET, DEVICE_RELAY, device_id, op, 0, [0u8; 4]);
-            let mut wrote = false;
-            
-            let mut w = writer.lock().await;
-            if let Some(writer) = w.as_mut() {
-                if writer.write_all(&data).await.is_ok() {
-                    if writer.flush().await.is_ok() {
-                        wrote = true;
-                    }
+        let op = if open_state { 1u8 } else { 2u8 };
+        let data = build_command_frame(BOARD_ROCKET, DEVICE_RELAY, device_id, op, 0, [0u8; 4]);
+        let mut wrote = false;
+        
+        let mut w = writer.lock().await;
+        if let Some(writer) = w.as_mut() {
+            if writer.write_all(&data).await.is_ok() {
+                if writer.flush().await.is_ok() {
+                    wrote = true;
                 }
             }
-            drop(w);
-            
-            if wrote {
-                Python::attach(|py| {
-                    let st = state.lock();
-                    if let Ok(relays) = st.bind(py).getattr("relays") {
-                        let _ = relays.set_item(device_id, open_state);
-                    }
-                    if device_id == 2 && open_state {
-                        let _ = st.bind(py).setattr("parachute_deployed", true);
-                        let _ = st.bind(py).setattr("step_parachute_deployed", true);
-                        let _ = st.bind(py).setattr("flight_stage", "DESCENT (PARACHUTE OPEN)");
-                    }
-                });
-            }
-            Ok(wrote)
-        })
+        }
+        drop(w);
+        
+        if wrote {
+            Python::attach(|py| {
+                let st = state.lock();
+                if let Ok(relays) = st.bind(py).getattr("relays") {
+                    let _ = relays.set_item(device_id, open_state);
+                }
+                if device_id == 2 && open_state {
+                    let _ = st.bind(py).setattr("parachute_deployed", true);
+                    let _ = st.bind(py).setattr("step_parachute_deployed", true);
+                    let _ = st.bind(py).setattr("flight_stage", "DESCENT (PARACHUTE OPEN)");
+                }
+            });
+        }
+        Ok(wrote)
     }
+
 }

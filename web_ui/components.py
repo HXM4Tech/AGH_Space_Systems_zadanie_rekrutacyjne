@@ -26,9 +26,9 @@ CHECKLIST_ITEMS = [
 ]
 
 class MissionDashboard:
-    def __init__(self, state: rocket_ctl_rust.RocketState, client: rocket_ctl_rust.RocketClient):
+    def __init__(self, state: rocket_ctl_rust.RocketState, manager: rocket_ctl_rust.RocketManager):
         self.state = state
-        self.client = client
+        self.manager = manager
         self.auto_running: bool = False
         self.auto_task: Optional[asyncio.Task] = None
         self.auto_status_text: str = None
@@ -149,48 +149,48 @@ class MissionDashboard:
                             with ui.grid().classes("grid-cols-2 sm:grid-cols-4 gap-2 w-full"):
                                 self.btn_ox_refuel = ui.button(
                                     "Refuel Oxidizer",
-                                    on_click=lambda: self.client.send_servo(SERVO_OXIDIZER_INTAKE, 0)
+                                    on_click=self.manager.refuel_oxidizer
                                 ).classes("bg-cyan-700 hover:bg-cyan-600 text-white font-bold py-2 text-xs rounded-lg shadow")
 
                                 self.btn_ox_close = ui.button(
                                     "Close Oxidizer",
-                                    on_click=lambda: self.client.send_servo(SERVO_OXIDIZER_INTAKE, 100)
+                                    on_click=self.manager.close_oxidizer
                                 ).classes("bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 text-xs rounded-lg shadow")
 
                                 self.btn_fuel_refuel = ui.button(
                                     "Refuel Fuel",
-                                    on_click=lambda: self.client.send_servo(SERVO_FUEL_INTAKE, 0)
+                                    on_click=self.manager.refuel_fuel
                                 ).classes("bg-blue-700 hover:bg-blue-600 text-white font-bold py-2 text-xs rounded-lg shadow")
 
                                 self.btn_fuel_close = ui.button(
                                     "Close Fuel",
-                                    on_click=lambda: self.client.send_servo(SERVO_FUEL_INTAKE, 100)
+                                    on_click=self.manager.close_fuel
                                 ).classes("bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 text-xs rounded-lg shadow")
 
                             # Tank Heating & Pressurization
                             with ui.grid().classes("grid-cols-2 gap-2 w-full"):
                                 self.btn_heater_on = ui.button(
                                     "Heater ON",
-                                    on_click=lambda: self.client.send_relay(RELAY_HEATER, True)
+                                    on_click=self.manager.activate_heater
                                 ).classes("bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 text-xs rounded-lg shadow")
 
                                 self.btn_heater_off = ui.button(
                                     "Heater OFF",
-                                    on_click=lambda: self.client.send_relay(RELAY_HEATER, False)
+                                    on_click=self.manager.deactivate_heater
                                 ).classes("bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 text-xs rounded-lg shadow")
 
                             # Main Ignition Sequence
                             with ui.row().classes("w-full"):
                                 self.launch_btn = ui.button(
                                     "START (IGNITION SEQUENCE)",
-                                    on_click=self.execute_launch_sequence
+                                    on_click=self.manager.ignition_sequence
                                 ).classes("w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 text-xs rounded-lg shadow")
 
                             # Parachute Deployment
                             with ui.row().classes("w-full"):
                                 self.parachute_btn = ui.button(
                                     "DEPLOY PARACHUTE",
-                                    on_click=lambda: self.client.send_relay(RELAY_PARACHUTE, True)
+                                    on_click=self.manager.deploy_parachute
                                 ).classes("w-full bg-slate-700 text-slate-300 font-bold py-2.5 text-xs rounded-lg shadow")
 
                     with ui.card().classes("w-full bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4"):
@@ -249,63 +249,42 @@ class MissionDashboard:
         except Exception:
             pass
 
-    async def execute_launch_sequence(self):
-        # TODO: Move to Rust
-
-        # Ensure intakes are closed
-        await self.client.send_servo(SERVO_FUEL_INTAKE, 100)
-        await self.client.send_servo(SERVO_OXIDIZER_INTAKE, 100)
-        await asyncio.sleep(0.05)
-
-        # Open both main valves simultaneously (<1.0s window)
-        await self.client.send_servo(SERVO_FUEL_MAIN, 0)
-        await self.client.send_servo(SERVO_OXIDIZER_MAIN, 0)
-        await asyncio.sleep(0.15)
-
-        # Fire igniter
-        await self.client.send_relay(RELAY_IGNITER, True)
-        self.state.flight_stage = "ASCENT"
-        self.state.step_ignition = True
-
-        await asyncio.sleep(1.0)
-        await self.client.send_relay(RELAY_IGNITER, False)
-
     async def _auto_mission_worker(self):
         """Complete autopilot mission sequence without any toast notifications."""
         try:
             # 1. Fill oxidizer
             self.auto_status_text = "Refueling oxidizer tank..."
-            await self.client.send_servo(SERVO_OXIDIZER_INTAKE, 0)
+            await self.manager.refuel_oxidizer()
             while self.state.oxidizer_level < 100.0:
                 if not self.auto_running:
                     return
                 await asyncio.sleep(0.2)
-            await self.client.send_servo(SERVO_OXIDIZER_INTAKE, 100)
+            await self.manager.close_oxidizer()
             self.state.step_ox_filled = True
 
             await asyncio.sleep(0.5)
 
             # 2. Refuel (fuel tank)
             self.auto_status_text = "Refueling fuel tank..."
-            await self.client.send_servo(SERVO_FUEL_INTAKE, 0)
+            await self.manager.refuel_fuel()
             while self.state.fuel_level < 100.0:
                 if not self.auto_running:
                     return
                 await asyncio.sleep(0.2)
-            await self.client.send_servo(SERVO_FUEL_INTAKE, 100)
+            await self.manager.close_fuel()
             self.state.step_fuel_filled = True
 
             await asyncio.sleep(0.5)
 
             # 3. Pressurize oxidizer by heating
             self.auto_status_text = "Heating oxidizer..."
-            await self.client.send_relay(RELAY_HEATER, True)
+            await self.manager.activate_heater()
             while self.state.oxidizer_pressure < 59.0:
                 if not self.auto_running:
-                    await self.client.send_relay(RELAY_HEATER, False)
+                    await self.manager.deactivate_heater()
                     return
                 await asyncio.sleep(0.2)
-            await self.client.send_relay(RELAY_HEATER, False)
+            await self.manager.deactivate_heater()
             self.state.step_pressurized = True
 
             # 4. Ignition sequence
@@ -313,7 +292,8 @@ class MissionDashboard:
             await asyncio.sleep(1.0)
             if not self.auto_running:
                 return
-            await self.execute_launch_sequence()
+            
+            await self.manager.ignition_sequence()
 
             # 5. Ascent & coasting to apogee
             self.auto_status_text = "Ascent in progress..."
@@ -331,7 +311,7 @@ class MissionDashboard:
             # 6. Deploy parachute immediately at apogee
             self.auto_status_text = "Descent - deploying parachute..."
             for _ in range(3):
-                await self.client.send_relay(RELAY_PARACHUTE, True)
+                await self.manager.deploy_parachute()
                 await asyncio.sleep(0.1)
             self.state.parachute_deployed = True
             self.state.step_parachute_deployed = True
@@ -348,7 +328,7 @@ class MissionDashboard:
 
         except asyncio.CancelledError:
             self.auto_status_text = None
-            await self.client.send_relay(RELAY_HEATER, False)
+            await self.manager.deactivate_heater()
             raise
         except Exception as e:
             self.auto_status_text = f"ERROR: {e}"

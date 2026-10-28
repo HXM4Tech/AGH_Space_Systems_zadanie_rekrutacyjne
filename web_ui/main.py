@@ -11,15 +11,15 @@ import rocket_ctl_rust
 from components import MissionDashboard
 
 state = rocket_ctl_rust.RocketState()
-client = rocket_ctl_rust.RocketClient(state, host="127.0.0.1", port=3000)
+manager = rocket_ctl_rust.RocketManager(state, host="127.0.0.1", port=3000)
 
 @ui.page('/')
 def index():
     """Renders the dashboard for each connected browser session."""
-    dashboard = MissionDashboard(state, client)
+    dashboard = MissionDashboard(state, manager)
     ui.timer(0.1, dashboard.update)
 
-app.on_startup(client.start)
+app.on_startup(manager.connect)
 
 if __name__ in {"__main__", "__mp_main__"}:
     try:

@@ -1,19 +1,21 @@
 mod calc_crc;
 mod client;
+mod manager;
 mod frame;
 mod state;
+mod constants;
 
-use client::RocketClient;
+use manager::RocketManager;
+use state::RocketState;
+
+use constants::*;
 
 use frame::{
-    build_command_frame, build_full_frame, parse_raw_frame, TelemetryFrame,
-    ACTION_ACK, ACTION_FEED, ACTION_NACK, ACTION_SERVICE, BOARD_ROCKET, BOARD_SOFTWARE,
-    DEVICE_RELAY, DEVICE_SENSOR, DEVICE_SERVO, PRIORITY_HIGH, PRIORITY_LOW,
+    build_command_frame, build_full_frame, parse_raw_frame, TelemetryFrame
 };
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use state::RocketState;
 
 #[pyfunction]
 fn parse_frame(data: &[u8]) -> PyResult<TelemetryFrame> {
@@ -68,7 +70,7 @@ fn rocket_ctl_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_raw_frame, m)?)?;
     m.add_class::<TelemetryFrame>()?;
     m.add_class::<RocketState>()?;
-    m.add_class::<RocketClient>()?;
+    m.add_class::<RocketManager>()?;
 
     let c = pyo3::types::PyModule::new(
         m.py(),
@@ -89,13 +91,13 @@ fn rocket_ctl_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     c.add("DEVICE_SENSOR", DEVICE_SENSOR)?;
 
     // Mission control constants
-    c.add("SERVO_FUEL_INTAKE", 0u8)?;
-    c.add("SERVO_OXIDIZER_INTAKE", 1u8)?;
-    c.add("SERVO_FUEL_MAIN", 2u8)?;
-    c.add("SERVO_OXIDIZER_MAIN", 3u8)?;
-    c.add("RELAY_HEATER", 0u8)?;
-    c.add("RELAY_IGNITER", 1u8)?;
-    c.add("RELAY_PARACHUTE", 2u8)?;
+    c.add("SERVO_FUEL_INTAKE", SERVO_FUEL_INTAKE)?;
+    c.add("SERVO_OXIDIZER_INTAKE", SERVO_OXIDIZER_INTAKE)?;
+    c.add("SERVO_FUEL_MAIN", SERVO_FUEL_MAIN)?;
+    c.add("SERVO_OXIDIZER_MAIN", SERVO_OXIDIZER_MAIN)?;
+    c.add("RELAY_HEATER", RELAY_HEATER)?;
+    c.add("RELAY_IGNITER", RELAY_IGNITER)?;
+    c.add("RELAY_PARACHUTE", RELAY_PARACHUTE)?;
 
     m.add_submodule(&c)?;
 
