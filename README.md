@@ -55,7 +55,7 @@ Panel dostępny pod adresem: [http://localhost:8080](http://localhost:8080)
 ## Funkcje
 
 - **Pełna integracja z protokołem** – parsowanie ramek, budowanie komend (servo/relay), obsługa ACK/FEED/NACK
-- **Cały stan i klient w Rust** – `RocketState` i `RocketClient` są structami eksportowanymi jako klasy z `rocket_ctl_rust` (PyO3). `RocketClient` utrzymuje połączenie TCP, parsuje ramki i aktualizuje stan rakiety. Komendy `send_servo/send_relay` dostępne z Pythona.
+- **Cały stan i klient w Rust** – `RocketClient` utrzymuje połączenie TCP, parsuje ramki i aktualizuje stan rakiety przechowywany w `RocketState`. Metody `send_servo/send_relay` są wykorzystywane przez wyeksportowany do Pythona `RocketManager` dostarczający proste metody sterowania, którymi może również zarządzać `Autopilot`
 - **Mission Control UI** – przejrzysty panel NiceGUI z telemetrią, statusami, checklistą misji
 - **Blokady operacyjne (interlocki)** – kontrola kolejności tankowania, okna ciśnienia dla zapłonu, warunki bezpiecznego wyrzutu spadochronu
 - **Tryb manualny i autopilot** – pełna sekwencja automatyczna (tankowanie, podgrzewanie, zapłon, apogeum, wyrzut spadochronu, lądowanie)
