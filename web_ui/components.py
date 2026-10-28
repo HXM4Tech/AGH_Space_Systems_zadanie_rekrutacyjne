@@ -1,41 +1,35 @@
 import asyncio
 import time
-from typing import Optional, List
 from nicegui import ui
-import rocket_ctl_rust
 
-RELAY_HEATER = rocket_ctl_rust.constants.RELAY_HEATER
-RELAY_IGNITER = rocket_ctl_rust.constants.RELAY_IGNITER
-RELAY_PARACHUTE = rocket_ctl_rust.constants.RELAY_PARACHUTE
-SERVO_OXIDIZER_INTAKE = rocket_ctl_rust.constants.SERVO_OXIDIZER_INTAKE
-SERVO_FUEL_INTAKE = rocket_ctl_rust.constants.SERVO_FUEL_INTAKE
-SERVO_FUEL_MAIN = rocket_ctl_rust.constants.SERVO_FUEL_MAIN
-SERVO_OXIDIZER_MAIN = rocket_ctl_rust.constants.SERVO_OXIDIZER_MAIN
+from rocket_ctl_rust import RocketManager, Autopilot, constants
 
 BASE_CARD_CLS = "bg-slate-900 border p-4 rounded-xl shadow transition-all "
 
 CHECKLIST_ITEMS = [
     ("Refuel oxidizer tank", "step_ox_filled"),
     ("Refuel fuel tank", "step_fuel_filled"),
-    ("Pressurize oxidizer (by heating)", "step_pressurized"),
+    ("Pressurize oxidizer", "step_pressurized"),
     ("Ignition", "step_ignition"),
-    ("V-max", "step_vmax_reached"),
+    ("V-max / Engine shutdown", "step_vmax_reached"),
     ("H-max", "step_hmax_reached"),
     ("Deploy Parachute", "step_parachute_deployed"),
     ("Successful landing", "step_landed"),
 ]
 
 class MissionDashboard:
-    def __init__(self, state: rocket_ctl_rust.RocketState, manager: rocket_ctl_rust.RocketManager):
-        self.state = state
+    def __init__(self, manager: RocketManager, autopilot: Autopilot = None):
         self.manager = manager
-        self.auto_running: bool = False
-        self.auto_task: Optional[asyncio.Task] = None
+        self.state = manager.state
+
+        self.autopilot = autopilot
+        
+        self.auto_task: asyncio.Task = None
         self.auto_status_text: str = None
 
-        self.chk_rows: List = []
-        self.chk_icons: List = []
-        self.chk_labels: List = []
+        self.chk_rows: list = []
+        self.chk_icons: list = []
+        self.chk_labels: list = []
 
         self._build_ui()
 
@@ -218,123 +212,26 @@ class MissionDashboard:
 
     def start_autopilot(self):
         """Starts autopilot flight execution."""
-        if self.auto_running:
+        if self.autopilot is None:
             return
-        self.auto_running = True
-        try:
-            self.auto_task = asyncio.create_task(self._auto_mission_worker())
-        except RuntimeError:
-            coro = self._auto_mission_worker()
-            coro.close()
-            self.auto_task = None
+
+        self.auto_task = self.autopilot.run_mission()
 
     def stop_autopilot(self):
         """Disengages autopilot, unblocking manual control."""
         if self.auto_task and not self.auto_task.done():
-            self.auto_task.cancel()
-        self.auto_running = False
-        if hasattr(self, 'auto_switch') and self.auto_switch.value:
+            try:
+                self.auto_task.cancel()
+            except Exception:
+                pass
+
+        if self.auto_switch.value:
             self.auto_switch.value = False
+
         self.auto_status_text = None
-        # Ensure heater is safe on disengagement
-        try:
-            res = self.client.send_relay(RELAY_HEATER, False)
-            if asyncio.iscoroutine(res) or hasattr(res, '__await__'):
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        loop.create_task(res)
-                except Exception:
-                    pass
-        except Exception:
-            pass
 
-    async def _auto_mission_worker(self):
-        """Complete autopilot mission sequence without any toast notifications."""
-        try:
-            # 1. Fill oxidizer
-            self.auto_status_text = "Refueling oxidizer tank..."
-            await self.manager.refuel_oxidizer()
-            while self.state.oxidizer_level < 100.0:
-                if not self.auto_running:
-                    return
-                await asyncio.sleep(0.2)
-            await self.manager.close_oxidizer()
-            self.state.step_ox_filled = True
-
-            await asyncio.sleep(0.5)
-
-            # 2. Refuel (fuel tank)
-            self.auto_status_text = "Refueling fuel tank..."
-            await self.manager.refuel_fuel()
-            while self.state.fuel_level < 100.0:
-                if not self.auto_running:
-                    return
-                await asyncio.sleep(0.2)
-            await self.manager.close_fuel()
-            self.state.step_fuel_filled = True
-
-            await asyncio.sleep(0.5)
-
-            # 3. Pressurize oxidizer by heating
-            self.auto_status_text = "Heating oxidizer..."
-            await self.manager.activate_heater()
-            while self.state.oxidizer_pressure < 59.0:
-                if not self.auto_running:
-                    await self.manager.deactivate_heater()
-                    return
-                await asyncio.sleep(0.2)
-            await self.manager.deactivate_heater()
-            self.state.step_pressurized = True
-
-            # 4. Ignition sequence
-            self.auto_status_text = "Pressure optimal. Ignition..."
-            await asyncio.sleep(1.0)
-            if not self.auto_running:
-                return
-            
-            await self.manager.ignition_sequence()
-
-            # 5. Ascent & coasting to apogee
-            self.auto_status_text = "Ascent in progress..."
-            while not self.state.apogee_detected:
-                if not self.auto_running:
-                    return
-                # Dual trigger for apogee: fuel empty, alt > 30m, and alt dropping or velocity <= 0
-                if self.state.step_ignition and self.state.fuel_level <= 0.1 and self.state.max_altitude > 30.0:
-                    if self.state.altitude < self.state.max_altitude - 1.0 or self.state.velocity <= 0.0:
-                        self.state.apogee_detected = True
-                        self.state.step_hmax_reached = True
-                        break
-                await asyncio.sleep(0.05)
-
-            # 6. Deploy parachute immediately at apogee
-            self.auto_status_text = "Descent - deploying parachute..."
-            for _ in range(3):
-                await self.manager.deploy_parachute()
-                await asyncio.sleep(0.1)
-            self.state.parachute_deployed = True
-            self.state.step_parachute_deployed = True
-            self.state.flight_stage = "DESCENT (PARACHUTE OPEN)"
-
-            # 7. Descent to landing
-            self.auto_status_text = "Landing..."
-            while not self.state.step_landed:
-                if not self.auto_running:
-                    return
-                await asyncio.sleep(0.2)
-
-            self.auto_status_text = None
-
-        except asyncio.CancelledError:
-            self.auto_status_text = None
-            await self.manager.deactivate_heater()
-            raise
-        except Exception as e:
-            self.auto_status_text = f"ERROR: {e}"
-        finally:
-            self.auto_running = False
-            self.auto_switch.value = False
+        res = self.autopilot.stop()
+        asyncio.ensure_future(res)
 
     def update(self):
         """Called periodically by ui.timer to refresh dashboard state in real time."""
@@ -376,16 +273,29 @@ class MissionDashboard:
         # Tanks indicators
         self.ox_val.set_text(f"{self.state.oxidizer_level:.1f}%")
         self.ox_bar.set_value(self.state.oxidizer_level / 100.0)
-        self.ox_intake_label.set_text("OPEN" if self.state.servos[SERVO_OXIDIZER_INTAKE] == 0 else "CLOSED")
+
+        self.ox_intake_label.set_text(
+            "OPEN" if self.state.servos[constants.SERVO_OXIDIZER_INTAKE] == 0
+            else "CLOSED"
+        )
 
         self.fuel_val.set_text(f"{self.state.fuel_level:.1f}%")
         self.fuel_bar.set_value(self.state.fuel_level / 100.0)
-        self.fuel_intake_label.set_text("OPEN" if self.state.servos[SERVO_FUEL_INTAKE] == 0 else "CLOSED")
+
+        self.fuel_intake_label.set_text(
+            "OPEN" if self.state.servos[constants.SERVO_FUEL_INTAKE] == 0
+            else "CLOSED"
+        )
 
         # Pressure indicator
         p = self.state.oxidizer_pressure
         self.press_val.set_text(f"{p:.1f} bar")
-        self.heater_label.set_text("ON" if self.state.relays[RELAY_HEATER] else "OFF")
+
+        self.heater_label.set_text(
+            "ON" if self.state.relays[constants.RELAY_HEATER]
+            else "OFF"
+        )
+
         if 55.0 <= p <= 65.0:
             self.press_card.classes(replace=BASE_CARD_CLS + "bg-emerald-950/40 border-emerald-500")
             self.press_desc.set_text("OPTIMAL PRESSURE (100% THRUST)")
@@ -417,7 +327,7 @@ class MissionDashboard:
         if self.state.step_landed:
             self.auto_info_badge.set_text("MISSION COMPLETE")
             self.auto_info_badge.classes(replace="text-xs font-mono font-bold px-3 py-1 rounded bg-emerald-600 text-white border border-emerald-500")
-        elif self.auto_running:
+        elif self.autopilot.is_running():
             if self.auto_status_text is None:
                 self.auto_info_badge.set_text("AUTOPILOT ACTIVE")
             else:
@@ -459,7 +369,7 @@ class MissionDashboard:
                 lbl.classes(replace="text-sm text-slate-400 font-normal m-0 leading-none")
 
         # Manual control buttons state (Disabled & grayed out if Autopilot is active)
-        if self.auto_running:
+        if self.autopilot.is_running():
             self.btn_ox_refuel.set_enabled(False)
             self.btn_ox_close.set_enabled(False)
             self.btn_fuel_refuel.set_enabled(False)
@@ -474,12 +384,25 @@ class MissionDashboard:
             self.control_mode_badge.classes(replace="text-xs font-mono px-2.5 py-1 rounded bg-amber-950 text-amber-400 border border-amber-800 font-bold")
 
         else:
-            self.btn_ox_refuel.set_enabled(self.state.servos[SERVO_OXIDIZER_INTAKE] != 0)
-            self.btn_ox_close.set_enabled(self.state.servos[SERVO_OXIDIZER_INTAKE] == 0)
-            self.btn_fuel_refuel.set_enabled(self.state.can_refuel_fuel and self.state.servos[SERVO_FUEL_INTAKE] != 0)
-            self.btn_fuel_close.set_enabled(self.state.servos[SERVO_FUEL_INTAKE] == 0)
-            self.btn_heater_on.set_enabled(not self.state.relays[RELAY_HEATER])
-            self.btn_heater_off.set_enabled(self.state.relays[RELAY_HEATER])
+            self.btn_ox_refuel.set_enabled(
+                self.state.servos[constants.SERVO_OXIDIZER_INTAKE] != 0
+            )
+            self.btn_ox_close.set_enabled(
+                self.state.servos[constants.SERVO_OXIDIZER_INTAKE] == 0
+            )
+            self.btn_fuel_refuel.set_enabled(
+                self.state.can_refuel_fuel and self.state.servos[constants.SERVO_FUEL_INTAKE] != 0
+            )
+            self.btn_fuel_close.set_enabled(
+                self.state.servos[constants.SERVO_FUEL_INTAKE] == 0
+            )
+            self.btn_heater_on.set_enabled(
+                not self.state.relays[constants.RELAY_HEATER]
+            )
+            self.btn_heater_off.set_enabled(
+                self.state.relays[constants.RELAY_HEATER]
+            )
+
             self.launch_btn.set_enabled(self.state.can_launch)
             self.parachute_btn.set_enabled(self.state.can_deploy_parachute)
             self.parachute_btn.classes(replace="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 text-xs rounded-lg shadow-lg animate-pulse")

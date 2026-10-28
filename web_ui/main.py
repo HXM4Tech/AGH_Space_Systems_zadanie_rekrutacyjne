@@ -10,14 +10,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rocket_ctl_rust
 from components import MissionDashboard
 
-state = rocket_ctl_rust.RocketState()
-manager = rocket_ctl_rust.RocketManager(state, host="127.0.0.1", port=3000)
+manager = rocket_ctl_rust.RocketManager(host="127.0.0.1", port=3000)
+autopilot = rocket_ctl_rust.Autopilot(manager)
 
 @ui.page('/')
 def index():
     """Renders the dashboard for each connected browser session."""
-    dashboard = MissionDashboard(state, manager)
+    dashboard = MissionDashboard(manager, autopilot)
     ui.timer(0.1, dashboard.update)
+
 
 app.on_startup(manager.connect)
 
@@ -27,7 +28,8 @@ if __name__ in {"__main__", "__mp_main__"}:
             port=8080,
             title="AGH Space Systems Recruitment Challenge",
             dark=True,
-            reload=False
+            reload=False,
+            show=False
         )
     except KeyboardInterrupt:
         print()

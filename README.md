@@ -4,7 +4,7 @@ Kompletne rozwiązanie zadania rekrutacyjnego (Rocket Software, Jesień 2026).
 
 ## Architektura
 
-Projekt łączy warstwę niskopoziomową w Rust (PyO3) z interaktywnym panelem kontroli misji w Pythonie (NiceGUI).
+Projekt łączy warstwę niskopoziomową w Rust (PyO3, maturin) z interaktywnym panelem kontroli misji w Pythonie (NiceGUI)
 
 ```text
 ├── README.md               # Ten plik
@@ -14,10 +14,13 @@ Projekt łączy warstwę niskopoziomową w Rust (PyO3) z interaktywnym panelem k
 │   ├── Cargo.toml          # Manifest warstwy Rust
 │   ├── src/
 │   │   ├── lib.rs          # Eksport klas/funkcji do Pythona
+│   │   ├── constants.rs    # Definicje stałych
+│   │   ├── checksum.rs     # Liczenie sumy kontrolnej CRC-32
 │   │   ├── frame.rs        # Parsowanie/budowanie ramek protokołu AGH Space Systems
-│   │   ├── calc_crc.rs     # Liczenie sumy kontrolnej CRC-32
+│   │   ├── client.rs       # Klient TCP
 │   │   ├── state.rs        # Model stanu rakiety (telemetria, checklista, itd)
-│   │   └── client.rs       # Klient TCP (tokio) integrujący się z Pythonem
+│   │   ├── manager.rs      # Sterowanie rakietą (zintegorwane z Pythonem)
+│   │   ├── autopilot.rs    # Autopilot (uruchamiany z Pythona)
 ├── web_ui/                 # Warstwa Python - panel kontroli misji (NiceGUI)
 │   ├── main.py             # Punkt wejścia
 │   └── components.py       # Wygląd i działanie UI

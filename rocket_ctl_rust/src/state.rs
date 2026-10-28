@@ -46,7 +46,7 @@ pub struct RocketState {
 #[pymethods]
 impl RocketState {
     #[new]
-    fn new() -> Self {
+    pub fn new() -> Self {
         let now = Instant::now().elapsed().as_secs_f64() + (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or(Duration::from_secs(0)).as_secs_f64());
         let mut servos = HashMap::new();
         servos.insert(SERVO_FUEL_INTAKE, 100);

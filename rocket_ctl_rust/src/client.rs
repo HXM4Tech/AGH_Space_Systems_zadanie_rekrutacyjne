@@ -10,9 +10,10 @@ use tokio::sync::Mutex as TokioMutex;
 
 use crate::frame::build_command_frame;
 use crate::constants::*;
+use crate::state::RocketState;
 
 pub struct RocketClient {
-    state: Arc<Mutex<Py<PyAny>>>,
+    state: Arc<Mutex<Py<RocketState>>>,
     host: String,
     port: u16,
     writer: Arc<TokioMutex<Option<tokio::net::tcp::OwnedWriteHalf>>>,
@@ -20,7 +21,7 @@ pub struct RocketClient {
 }
 
 impl RocketClient {
-    pub fn new(state: Arc<Mutex<Py<PyAny>>>, host: &str, port: u16) -> PyResult<Self> {
+    pub fn new(state: Arc<Mutex<Py<RocketState>>>, host: &str, port: u16) -> PyResult<Self> {
         Ok(Self {
             state,
             host: host.to_string(),

@@ -1,4 +1,6 @@
 use crate::client::RocketClient;
+use crate::state::RocketState;
+
 use crate::constants::*;
 
 use pyo3::prelude::*;
@@ -8,17 +10,20 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 #[pyclass]
+#[derive(Clone)]
 pub struct RocketManager {
-    client: Arc<RocketClient>,
-    state: Arc<Mutex<Py<PyAny>>>,
+    pub client: Arc<RocketClient>,
+    pub state: Arc<Mutex<Py<RocketState>>>,
 }
 
 #[pymethods]
 impl RocketManager {
     #[new]
-    #[pyo3(signature = (state, host="127.0.0.1", port=3000))]
-    fn new(state: Py<PyAny>, host: &str, port: u16) -> PyResult<Self> {
-        let s = Arc::new(Mutex::new(state));
+    #[pyo3(signature = (host="127.0.0.1", port=3000))]
+    fn new(host: &str, port: u16) -> PyResult<Self> {
+        let s = Arc::new(Mutex::new(
+            Python::attach(|py| Py::new(py, RocketState::new()))?
+        ));
 
         let client = Arc::new(RocketClient::new(s.clone(), host, port)?);
         Ok(Self { client, state: s })
@@ -33,7 +38,12 @@ impl RocketManager {
         })
     }
 
-    fn refuel_oxidizer<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    #[getter]
+    fn state(&self) -> Py<RocketState> {
+        Python::attach(|py| self.state.lock().clone_ref(py))
+    }
+
+    pub fn refuel_oxidizer<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let c = self.client.clone();
 
         future_into_py(py, async move {
@@ -41,7 +51,7 @@ impl RocketManager {
         })
     }
 
-    fn close_oxidizer<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn close_oxidizer<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let c = self.client.clone();
 
         future_into_py(py, async move {
@@ -49,7 +59,7 @@ impl RocketManager {
         })
     }
 
-    fn refuel_fuel<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn refuel_fuel<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let c = self.client.clone();
 
         future_into_py(py, async move {
@@ -57,7 +67,7 @@ impl RocketManager {
         })
     }
 
-    fn close_fuel<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn close_fuel<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let c = self.client.clone();
 
         future_into_py(py, async move {
@@ -65,7 +75,7 @@ impl RocketManager {
         })
     }
 
-    fn activate_heater<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn activate_heater<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let c = self.client.clone();
 
         future_into_py(py, async move {
@@ -73,7 +83,7 @@ impl RocketManager {
         })
     }
 
-    fn deactivate_heater<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn deactivate_heater<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let c = self.client.clone();
 
         future_into_py(py, async move {
@@ -81,7 +91,7 @@ impl RocketManager {
         })
     }
 
-    fn deploy_parachute<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn deploy_parachute<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let c = self.client.clone();
 
         future_into_py(py, async move {
@@ -89,7 +99,7 @@ impl RocketManager {
         })
     }
 
-    fn ignition_sequence<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn ignition_sequence<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let c = self.client.clone();
         let s = self.state.clone();
 
@@ -105,8 +115,8 @@ impl RocketManager {
                 let st = s.lock();
                 let state = st.bind(py);
 
-                state.setattr("step_ignition", true).unwrap();
-                state.setattr("flight_stage", "ASCENT").unwrap();
+                let _ = state.setattr("step_ignition", true);
+                let _ = state.setattr("flight_stage", "ASCENT");
             });
 
             tokio::time::sleep(time::Duration::from_millis(1000)).await;

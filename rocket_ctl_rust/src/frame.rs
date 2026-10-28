@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::calc_crc::calculate_crc32;
+use crate::checksum::calculate_crc32;
 use crate::constants::*;
 
 #[pyclass(get_all)]
