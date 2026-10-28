@@ -59,7 +59,7 @@ Panel dostępny pod adresem: [http://localhost:8080](http://localhost:8080)
 - **Mission Control UI** – przejrzysty panel NiceGUI z telemetrią, statusami, checklistą misji
 - **Blokady operacyjne (interlocki)** – kontrola kolejności tankowania, okna ciśnienia dla zapłonu, warunki bezpiecznego wyrzutu spadochronu
 - **Tryb manualny i autopilot** – pełna sekwencja automatyczna (tankowanie, podgrzewanie, zapłon, apogeum, wyrzut spadochronu, lądowanie)
-- **Śledzenie lotu** – automatyczne wykrywanie apogeum, faz lotu, detekcja lądowania. Po udanym lądowaniu (z otwartym spadochronem) wysokość jest resetowas ekspona do 0 dla czytelnego statusu
+- **Śledzenie lotu** – automatyczne wykrywanie apogeum, faz lotu, detekcja lądowania. Po udanym lądowaniu (z otwartym spadochronem) wysokość jest resetowa do 0
 
 ## Procedura lotu (orientacyjna)
 
