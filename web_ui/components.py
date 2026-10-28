@@ -250,7 +250,8 @@ class MissionDashboard:
             pass
 
     async def execute_launch_sequence(self):
-        """Executes ignition sequence with zero toast notifications."""
+        # TODO: Move to Rust
+
         # Ensure intakes are closed
         await self.client.send_servo(SERVO_FUEL_INTAKE, 100)
         await self.client.send_servo(SERVO_OXIDIZER_INTAKE, 100)
@@ -477,7 +478,7 @@ class MissionDashboard:
                 icon.update()
                 lbl.classes(replace="text-sm text-slate-400 font-normal m-0 leading-none")
 
-        # 9. Manual control buttons state (Disabled & grayed out if Autopilot is active)
+        # Manual control buttons state (Disabled & grayed out if Autopilot is active)
         if self.auto_running:
             self.btn_ox_refuel.set_enabled(False)
             self.btn_ox_close.set_enabled(False)
@@ -493,13 +494,12 @@ class MissionDashboard:
             self.control_mode_badge.classes(replace="text-xs font-mono px-2.5 py-1 rounded bg-amber-950 text-amber-400 border border-amber-800 font-bold")
 
         else:
-            # Manual control fully enabled & unlocked (no interlocks)
-            self.btn_ox_refuel.set_enabled(True)
-            self.btn_ox_close.set_enabled(True)
-            self.btn_fuel_refuel.set_enabled(self.state.can_refuel_fuel)
-            self.btn_fuel_close.set_enabled(True)
-            self.btn_heater_on.set_enabled(True)
-            self.btn_heater_off.set_enabled(True)
+            self.btn_ox_refuel.set_enabled(self.state.servos[SERVO_OXIDIZER_INTAKE] != 0)
+            self.btn_ox_close.set_enabled(self.state.servos[SERVO_OXIDIZER_INTAKE] == 0)
+            self.btn_fuel_refuel.set_enabled(self.state.can_refuel_fuel and self.state.servos[SERVO_FUEL_INTAKE] != 0)
+            self.btn_fuel_close.set_enabled(self.state.servos[SERVO_FUEL_INTAKE] == 0)
+            self.btn_heater_on.set_enabled(not self.state.relays[RELAY_HEATER])
+            self.btn_heater_off.set_enabled(self.state.relays[RELAY_HEATER])
             self.launch_btn.set_enabled(self.state.can_launch)
             self.parachute_btn.set_enabled(self.state.can_deploy_parachute)
             self.parachute_btn.classes(replace="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 text-xs rounded-lg shadow-lg animate-pulse")
