@@ -2,6 +2,9 @@
 
 Kompletne rozwiązanie zadania rekrutacyjnego (Rocket Software, Jesień 2026).
 
+## Wygląd panelu kontroli misji
+<img width="1663" height="995" alt="image" src="https://github.com/user-attachments/assets/39ff243b-fd0c-4433-a918-df062f7c0d19" />
+
 ## Architektura
 
 Projekt łączy warstwę niskopoziomową w Rust (PyO3, maturin) z interaktywnym panelem kontroli misji w Pythonie (NiceGUI)
