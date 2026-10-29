@@ -23,7 +23,7 @@ Projekt łączy warstwę niskopoziomową w Rust (PyO3, maturin) z interaktywnym 
 │   │   ├── client.rs       # Klient TCP
 │   │   ├── state.rs        # Model stanu rakiety (telemetria, checklista, itd)
 │   │   ├── manager.rs      # Sterowanie rakietą (zintegorwane z Pythonem)
-│   │   ├── autopilot.rs    # Autopilot (uruchamiany z Pythona)
+│   │   └── autopilot.rs    # Autopilot (uruchamiany z Pythona)
 ├── web_ui/                 # Warstwa Python - panel kontroli misji (NiceGUI)
 │   ├── main.py             # Punkt wejścia
 │   └── components.py       # Wygląd i działanie UI
