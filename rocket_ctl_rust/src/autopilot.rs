@@ -88,16 +88,18 @@ impl Autopilot {
                 return Ok(());
             }
 
-            set_status(state.clone(), "Refueling oxidizer tank...".to_string());
+            if get_f64(state.clone(), "oxidizer_level") < 100.0 {
+                set_status(state.clone(), "Refueling oxidizer tank...".to_string());
 
-            Python::attach(|py| { 
-                let _ = manager.borrow(py).refuel_oxidizer(py);
-            });
+                Python::attach(|py| { 
+                    let _ = manager.borrow(py).refuel_oxidizer(py);
+                });
 
-            loop {
-                if !*running.lock() { return Ok(()); }
-                if get_f64(state.clone(), "oxidizer_level") >= 100.0 { break; }
-                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                loop {
+                    if !*running.lock() { return Ok(()); }
+                    if get_f64(state.clone(), "oxidizer_level") >= 100.0 { break; }
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
             }
 
             Python::attach(|py| { 
@@ -112,16 +114,18 @@ impl Autopilot {
                 return Ok(());
             }
             
-            set_status(state.clone(), "Refueling fuel tank...".to_string());
+            if get_f64(state.clone(), "fuel_level") < 100.0 {
+                set_status(state.clone(), "Refueling fuel tank...".to_string());
 
-            Python::attach(|py| { 
-                let _ = manager.borrow(py).refuel_fuel(py);
-            });
+                Python::attach(|py| { 
+                    let _ = manager.borrow(py).refuel_fuel(py);
+                });
 
-            loop {
-                if !*running.lock() { return Ok(()); }
-                if get_f64(state.clone(), "fuel_level") >= 100.0 { break; }
-                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                loop {
+                    if !*running.lock() { return Ok(()); }
+                    if get_f64(state.clone(), "fuel_level") >= 100.0 { break; }
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
             }
 
             Python::attach(|py| { 
